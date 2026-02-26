@@ -89,45 +89,47 @@ export const THEME = {
 };
 
 export default function RootLayout() {
-  // const [session, setSession] = useState(null);
-  // const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // const segments = useSegments();
-  // const router = useRouter();
-  // const rootNavState = useRootNavigationState(); // ✅ router readiness signal
+  const segments = useSegments();
+  const router = useRouter();
+  const rootNavState = useRootNavigationState(); // ✅ router readiness signal
 
-  // useEffect(() => {
-  //   supabase.auth.getSession().then(({ data: { session } }) => {
-  //     setSession(session);
-  //     setLoading(false);
-  //   });
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
 
-  //   const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-  //     setSession(session);
-  //   });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
 
-  //   return () => subscription.unsubscribe();
-  // }, []);
+    return () => subscription.unsubscribe();
+  }, []);
 
-  // useEffect(() => {
+  useEffect(() => {
+    if (!rootNavState?.key) return;
+    if (loading) return;
+    if (!segments?.length) return;
 
-  //   if (!rootNavState?.key) return;
-  //   if (loading) return;
-  //   if (!segments?.length) return;
+    const inAuthGroup = segments[0] === "auth";
 
-  //   const inAuthGroup = segments[0] === "auth";
-
-  //   if (!session && !inAuthGroup) router.replace("/auth/sign-in");
-  //   if (session && inAuthGroup) router.replace("/(tabs)");
-  // }, [ loading, session, segments, router]);
+    if (!session && !inAuthGroup) router.replace("/auth/sign-in");
+    if (session && inAuthGroup) router.replace("/(tabs)");
+  }, [loading, session, segments, router, rootNavState?.key]);
 
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
-        {/* <Stack.Screen name="auth/sign-in" /> */}
+        <Stack.Screen name="auth/sign-in" />
       </Stack>
       <StatusBar style="light" />
+      {loading && (
+        <View style={{ position: "absolute", inset: 0, backgroundColor: THEME.background }} />
+      )}
     </>
   );
 }
