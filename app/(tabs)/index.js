@@ -36,7 +36,7 @@ export default function DashboardScreen() {
     try {
       setError(null);
 
-      // Fetch all data in parallel for speed
+      // Fetch all data 
       const [total, cats, recent] = await Promise.all([
         getTotalSpending(currentMonth),
         getSpendingByCategory(currentMonth),

@@ -107,10 +107,6 @@ CREATE POLICY "Users can view own transactions"
 -- Users cannot directly write to this table.
 
 
--- ─── OPTIONAL: Grant service role access ────────────────────
--- Supabase service role already bypasses RLS, so no explicit grants needed.
--- But if you use a Postgres role for edge functions, add grants here.
-
 
 -- ─── VERIFICATION QUERIES ────────────────────────────────────
 -- Run these to verify your schema after applying:

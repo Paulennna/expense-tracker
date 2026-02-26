@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { THEME } from '../_layout';
+import {THEME} from "../_layout"
 import { getTransactions } from '../../lib/api';
 import { CATEGORY_NAMES, getCurrentMonth, getMonthLabel } from '../../lib/categories';
 import TransactionRow from '../../components/TransactionRow';
@@ -67,7 +67,7 @@ export default function TransactionsScreen() {
   useEffect(() => {
     setLoading(true);
     loadTransactions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [selectedMonth, selectedCategory]);
 
   // Debounce search — wait 400ms after user stops typing
@@ -78,13 +78,13 @@ export default function TransactionsScreen() {
     }, 400);
 
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  
   }, [search]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadTransactions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [selectedMonth, selectedCategory, search]);
 
   function clearFilters() {
