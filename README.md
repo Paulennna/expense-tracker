@@ -44,6 +44,6 @@ The app features a frictionless onboarding experience through Supabase Magic Lin
 
 
 
-## 👨‍💻 Developer Notes
+## Developer Notes
 
 This project was a deep dive into connecting complex, secure SDKs (like Plaid) within a managed React Native (Expo) lifecycle. Overcoming challenges with deep-linking for Magic Links and secure server-to-server Plaid token exchanges were significant milestones in this build.
