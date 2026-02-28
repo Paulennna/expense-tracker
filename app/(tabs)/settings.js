@@ -3,8 +3,7 @@ import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
+import { create, open } from 'react-native-plaid-link-sdk';
 import { supabase } from '../../lib/supabaseClient';
 import {
   createLinkToken,
@@ -17,7 +16,6 @@ import { THEME } from '../_layout';
 
 export default function SettingsScreen() {
   const [connections, setConnections] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [linking, setLinking] = useState(false);
   const [syncing, setSyncing] = useState({});
 
@@ -43,28 +41,25 @@ export default function SettingsScreen() {
       // 1. Get Link Token from Supabase Edge Function
       const { link_token } = await createLinkToken();
 
-      // 2. Open Hosted Link URL using expo-web-browser
-      // Plaid Sandbox Hosted Link format:
-      const redirectUri = Linking.createURL('/oauth'); // Current app scheme
-      const hostedUrl = `https://cdn.plaid.com/link/v2/stable/link.html?isWebview=true&token=${link_token}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+      // 2. Open Native Plaid Modal
+      create({ token: link_token, noLoadingState: false });
 
-      const result = await WebBrowser.openAuthSessionAsync(hostedUrl, redirectUri);
-
-      if (result.type === 'success' && result.url) {
-        // Parse the public_token from the redirected URL
-        const urlObj = new URL(result.url);
-        const publicToken = urlObj.searchParams.get('public_token');
-        const status = urlObj.searchParams.get('status');
-
-        if (publicToken) {
+      open({
+        onSuccess: async (success) => {
           // 3. Exchange public token for access token
-          await exchangePublicToken(publicToken, { institution: { name: 'Plaid Sandbox Bank' } });
+          await exchangePublicToken(success.publicToken, { institution: { name: success.metadata?.institution?.name || 'Plaid Sandbox Bank' } });
           Alert.alert('Success', 'Bank account connected successfully!');
           await loadData();
-        } else if (status !== 'exit') {
-          Alert.alert('Cancelled', 'Bank connection was cancelled.');
+        },
+        onExit: (exit) => {
+          if (exit.error) {
+            console.error('Plaid Exit Error:', exit.error);
+            Alert.alert('Error', exit.error.message);
+          } else {
+            console.log('User exited Plaid Link manually');
+          }
         }
-      }
+      });
     } catch (err) {
       console.error(err);
       Alert.alert('Bank Connection Failed', err.message);

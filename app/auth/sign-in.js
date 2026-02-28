@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabaseClient';
 import { THEME } from '../_layout';
 
@@ -47,13 +48,20 @@ export default function SignInScreen() {
 
     setLoading(true);
 
+    // Automatically generate the correct redirect URL based on environment (Expo Go vs. Standalone app)
+    let redirectUrl = Linking.createURL('/auth/callback');
+
+    // When using ngrok/tunnel, createURL sometimes strips the path. Provide a fallback to guarantee it.
+    if (!redirectUrl.includes('auth/callback')) {
+      redirectUrl = `${redirectUrl}/--/auth/callback`;
+    }
+
+    console.log('Sending Magic Link with redirect URL:', redirectUrl);
+
     const { error } = await supabase.auth.signInWithOtp({
       email: trimmedEmail,
       options: {
-        // This is the deep link scheme that brings users back to your app.
-        // It matches the "scheme" in app.json.
-        // For production: set this to your custom domain or app link.
-        emailRedirectTo: 'expensetracker://auth/callback',
+        emailRedirectTo: redirectUrl,
       },
     });
 

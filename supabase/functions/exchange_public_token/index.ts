@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     const { public_token, institution_name } = await req.json();
     if (!public_token) return errorResponse('Missing public_token', 400);
 
-   
+
     const plaidBaseUrl = PLAID_BASE_URLS[PLAID_ENV] || PLAID_BASE_URLS.sandbox;
 
     const exchangeResponse = await fetch(`${plaidBaseUrl}/item/public_token/exchange`, {
@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
       return errorResponse('Failed to save bank connection', 500);
     }
 
-   
+
     return successResponse({
       success: true,
       connection_id: connectionData.id,

@@ -68,6 +68,7 @@
 // app/_layout.js
 import { useEffect, useState } from "react";
 import { Stack, useRouter, useSegments, useRootNavigationState } from "expo-router";
+import * as Linking from 'expo-linking';
 import { StatusBar } from "expo-status-bar";
 import { View } from "react-native";
 import { supabase } from "../lib/supabaseClient";
@@ -109,22 +110,60 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Global Deep Link Listener - Bypasses Expo Router entirely
   useEffect(() => {
-    if (!rootNavState?.key) return;
-    if (loading) return;
-    if (!segments?.length) return;
+    const handleDeepLink = async (url) => {
+      if (!url) return;
+      console.log("[Global Link Listener] URL:", url);
 
-    const inAuthGroup = segments[0] === "auth";
+      if (url.includes('access_token=') && url.includes('refresh_token=')) {
+        console.log("[Global Link Listener] Extracting tokens...");
+        let access_token = null;
+        let refresh_token = null;
+        const match = url.match(/#(.+)/);
+        if (match) {
+          const params = match[1].split('&');
+          params.forEach(param => {
+            const [key, val] = param.split('=');
+            if (key === 'access_token') access_token = val;
+            if (key === 'refresh_token') refresh_token = val;
+          });
+        }
 
-    if (!session && !inAuthGroup) router.replace("/auth/sign-in");
-    if (session && inAuthGroup) router.replace("/(tabs)");
+        if (access_token && refresh_token) {
+          const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+          if (error) console.error("Session set error:", error);
+        }
+      }
+    };
+
+    Linking.getInitialURL().then(handleDeepLink);
+    const sub = Linking.addEventListener('url', ({ url }) => handleDeepLink(url));
+    return () => sub.remove();
+  }, []);
+
+  // Standard Routing Guard
+  useEffect(() => {
+    if (!rootNavState?.key || loading) return;
+
+    const path = segments.join("/");
+    const inAuthGroup = path.startsWith("auth");
+    const inCallback = path === "auth/callback";
+
+    if (!session && !inAuthGroup && !inCallback) {
+      router.replace("/auth/sign-in");
+    }
+    if (session && inAuthGroup && !inCallback) {
+      router.replace("/(tabs)");
+    }
   }, [loading, session, segments, router, rootNavState?.key]);
 
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="auth/sign-in" />
+        <Stack.Screen name="auth" />
+        <Stack.Screen name="index" />
       </Stack>
       <StatusBar style="light" />
       {loading && (

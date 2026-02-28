@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     const authHeader = req.headers.get('Authorization');
@@ -72,16 +72,16 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) return errorResponse('Invalid or expired token', 401);
 
-    
+
     const { bank_connection_id } = await req.json();
     if (!bank_connection_id) return errorResponse('Missing bank_connection_id', 400);
 
-   
+
     const { data: connection, error: connError } = await supabase
       .from('bank_connections')
       .select('*')
       .eq('id', bank_connection_id)
-      .eq('user_id', user.id) 
+      .eq('user_id', user.id)
       .single();
 
     if (connError || !connection) {
@@ -90,8 +90,8 @@ Deno.serve(async (req) => {
 
     const plaidBaseUrl = PLAID_BASE_URLS[PLAID_ENV] || PLAID_BASE_URLS.sandbox;
 
-   
-    let cursor = connection.cursor; 
+
+    let cursor = connection.cursor;
     let allAdded = [];
     let allModified = [];
     let allRemoved = [];
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
         access_token: connection.plaid_access_token,
       };
 
-  
+
       if (cursor) {
         syncBody.cursor = cursor;
       }
@@ -131,27 +131,27 @@ Deno.serve(async (req) => {
       hasMore = syncData.has_more;
     }
 
-    
+
     const toUpsert = [...allAdded, ...allModified].map((tx) => ({
       user_id: user.id,
       bank_connection_id: connection.id,
-      plaid_transaction_id: tx.transaction_id,   
+      plaid_transaction_id: tx.transaction_id,
       name: tx.name,
       merchant_name: tx.merchant_name || null,
-      amount: tx.amount,                           
+      amount: tx.amount,
       iso_currency_code: tx.iso_currency_code || 'USD',
       date: tx.date,
       category: categorizeTransaction(tx.name, tx.merchant_name, tx.category),
       pending: tx.pending,
     }));
 
-    
+
     if (toUpsert.length > 0) {
       const { error: upsertError } = await supabase
         .from('transactions')
         .upsert(toUpsert, {
-          onConflict: 'plaid_transaction_id', 
-          ignoreDuplicates: false,             
+          onConflict: 'plaid_transaction_id',
+          ignoreDuplicates: false,
         });
 
       if (upsertError) {
@@ -160,18 +160,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    
+
     if (allRemoved.length > 0) {
       const removedIds = allRemoved.map((tx) => tx.transaction_id);
       const { error: deleteError } = await supabase
         .from('transactions')
         .delete()
         .in('plaid_transaction_id', removedIds)
-        .eq('user_id', user.id); 
+        .eq('user_id', user.id);
 
       if (deleteError) {
         console.error('Delete error:', deleteError);
-        
+
       }
     }
 
@@ -187,7 +187,7 @@ Deno.serve(async (req) => {
       // Non-fatal: log but continue
     }
 
-    
+
     return successResponse({
       added: allAdded.length,
       modified: allModified.length,

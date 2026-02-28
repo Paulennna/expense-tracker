@@ -34,6 +34,7 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
+      console.error('Missing Authorization header. Received headers:', Object.fromEntries(req.headers.entries()));
       return errorResponse('Missing Authorization header', 401);
     }
 
@@ -42,6 +43,7 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
+      console.error('Invalid or expired token. Error:', authError, 'User:', user);
       return errorResponse('Invalid or expired token', 401);
     }
 
@@ -54,13 +56,13 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         client_id: PLAID_CLIENT_ID,
         secret: PLAID_SECRET,
-        client_name: 'Expense Tracker',  
+        client_name: 'Expense Tracker',
         user: {
-          
+
           client_user_id: user.id,
         },
-        products: ['transactions'],      
-        country_codes: ['US'],          
+        products: ['transactions'],
+        country_codes: ['US'],
         language: 'en',
       }),
     });
