@@ -1,9 +1,9 @@
 // app/(tabs)/settings.js
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from "react-native";
+import React, { useState, useEffect, useCallback } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView, Platform } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { create, open } from 'react-native-plaid-link-sdk';
+
 import { supabase } from '../../lib/supabaseClient';
 import {
   createLinkToken,
@@ -16,8 +16,44 @@ import { THEME } from '../_layout';
 
 export default function SettingsScreen() {
   const [connections, setConnections] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [linking, setLinking] = useState(false);
   const [syncing, setSyncing] = useState({});
+  const [linkToken, setLinkToken] = useState(null);
+
+  // Web-specific Button Component to isolate the Plaid Link hook
+  const WebPlaidButton = ({ token, onSuccess }) => {
+    // Only import the hook on web to avoid native bundler issues
+    const { usePlaidLink } = require('react-plaid-link');
+
+    useEffect(() => {
+      console.log("WebPlaidButton Rendered with token:", token ? "YES" : "NO");
+    }, [token]);
+
+    const { open: openWebPlaid, ready: webPlaidReady } = usePlaidLink({
+      token: token,
+      onSuccess: onSuccess,
+      onExit: (exit) => {
+        console.log('User exited Plaid Link Web manually', exit);
+      },
+    });
+
+    useEffect(() => {
+      console.log("Plaid hook ready state changed:", webPlaidReady);
+    }, [webPlaidReady]);
+
+    return (
+      <TouchableOpacity
+        style={[styles.button, (!token || !webPlaidReady) && styles.buttonDisabled]}
+        onPress={() => openWebPlaid()}
+        disabled={!token || !webPlaidReady}
+      >
+        <Text style={styles.buttonText}>
+          {(!token || !webPlaidReady) ? 'Loading Plaid...' : 'Connect Bank (Web)'}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   useEffect(() => {
     loadData();
@@ -28,6 +64,12 @@ export default function SettingsScreen() {
     try {
       const data = await getBankConnections();
       setConnections(data || []);
+
+      // Pre-fetch link token for Plaid
+      console.log('Fetching Plaid Link Token...');
+      const { link_token } = await createLinkToken();
+      console.log('Received Link Token:', link_token ? 'YES' : 'NO');
+      setLinkToken(link_token);
     } catch (err) {
       Alert.alert('Error', err.message);
     } finally {
@@ -36,20 +78,25 @@ export default function SettingsScreen() {
   }
 
   async function handleConnectBank() {
+    // On web, we have to use the <PlaidLink> component method instead of the imperative create/open 
+    // to avoid popup blockers or web-view issues.
+    if (!linkToken) {
+      Alert.alert('Error', 'Link token not ready yet.');
+      return;
+    }
     setLinking(true);
     try {
-      // 1. Get Link Token from Supabase Edge Function
-      const { link_token } = await createLinkToken();
-
       // 2. Open Native Plaid Modal
-      create({ token: link_token, noLoadingState: false });
+      // Require the native module dynamically to avoid compiling Android/iOS code on Web
+      const PlaidNative = require('react-native-plaid-link-sdk');
+      PlaidNative.create({ token: linkToken, noLoadingState: false });
 
-      open({
+      PlaidNative.open({
         onSuccess: async (success) => {
-          // 3. Exchange public token for access token
           await exchangePublicToken(success.publicToken, { institution: { name: success.metadata?.institution?.name || 'Plaid Sandbox Bank' } });
           Alert.alert('Success', 'Bank account connected successfully!');
           await loadData();
+          setLinking(false);
         },
         onExit: (exit) => {
           if (exit.error) {
@@ -58,12 +105,12 @@ export default function SettingsScreen() {
           } else {
             console.log('User exited Plaid Link manually');
           }
+          setLinking(false);
         }
       });
     } catch (err) {
       console.error(err);
       Alert.alert('Bank Connection Failed', err.message);
-    } finally {
       setLinking(false);
     }
   }
@@ -94,6 +141,16 @@ export default function SettingsScreen() {
   async function handleSignOut() {
     await supabase.auth.signOut();
   }
+
+  const handleWebSuccess = useCallback(async (public_token, metadata) => {
+    try {
+      await exchangePublicToken(public_token, { institution: { name: metadata?.institution?.name || 'Plaid Sandbox Bank' } });
+      Alert.alert('Success', 'Bank account connected successfully!');
+      await loadData();
+    } catch (err) {
+      Alert.alert('Error', err.message);
+    }
+  }, []);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -135,9 +192,16 @@ export default function SettingsScreen() {
             ))
           )}
 
-          <TouchableOpacity style={styles.button} onPress={handleConnectBank} disabled={linking}>
-            {linking ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Connect a Bank Account</Text>}
-          </TouchableOpacity>
+          {Platform.OS === 'web' ? (
+            <WebPlaidButton
+              token={linkToken}
+              onSuccess={handleWebSuccess}
+            />
+          ) : (
+            <TouchableOpacity style={styles.button} onPress={handleConnectBank} disabled={linking}>
+              {linking ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Connect Bank</Text>}
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -170,6 +234,9 @@ const styles = StyleSheet.create({
   syncBtnText: { color: '#fff', fontWeight: 'bold' },
   button: {
     backgroundColor: THEME.primary, borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10
+  },
+  buttonDisabled: {
+    opacity: 0.6
   },
   logoutBtn: { backgroundColor: THEME.error },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' }

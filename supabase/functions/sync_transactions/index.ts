@@ -55,8 +55,8 @@ Deno.serve(async (req) => {
     return new Response(null, {
       headers: {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'authorization, content-type',
-        'Access-Control-Allow-Methods': 'POST',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
       },
     });
   }
@@ -97,39 +97,41 @@ Deno.serve(async (req) => {
     let allRemoved = [];
     let hasMore = true;
 
-    while (hasMore) {
-      const syncBody = {
-        client_id: PLAID_CLIENT_ID,
-        secret: PLAID_SECRET,
-        access_token: connection.plaid_access_token,
-      };
+    // Use /transactions/get for immediate Sandbox data instead of /transactions/sync which relies on webhooks
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30); // 30 days ago
+    const endDate = new Date();
 
+    const formatDate = (date) => date.toISOString().split('T')[0];
 
-      if (cursor) {
-        syncBody.cursor = cursor;
+    const syncBody = {
+      client_id: PLAID_CLIENT_ID,
+      secret: PLAID_SECRET,
+      access_token: connection.plaid_access_token,
+      start_date: formatDate(startDate),
+      end_date: formatDate(endDate),
+      options: {
+        count: 250,
+        offset: 0
       }
+    };
 
-      const syncResponse = await fetch(`${plaidBaseUrl}/transactions/sync`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(syncBody),
-      });
+    const syncResponse = await fetch(`${plaidBaseUrl}/transactions/get`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(syncBody),
+    });
 
-      const syncData = await syncResponse.json();
+    const syncData = await syncResponse.json();
 
-      if (!syncResponse.ok) {
-        console.error('Plaid sync error:', syncData);
-        return errorResponse(syncData.error_message || 'Plaid sync failed', 500);
-      }
-
-      allAdded = allAdded.concat(syncData.added || []);
-      allModified = allModified.concat(syncData.modified || []);
-      allRemoved = allRemoved.concat(syncData.removed || []);
-
-      // Update cursor after each page
-      cursor = syncData.next_cursor;
-      hasMore = syncData.has_more;
+    if (!syncResponse.ok) {
+      console.error('Plaid get transactions error:', syncData);
+      return errorResponse(syncData.error_message || 'Plaid sync failed', 500);
     }
+
+    allAdded = syncData.transactions || [];
+    allModified = [];
+    allRemoved = [];
 
 
     const toUpsert = [...allAdded, ...allModified].map((tx) => ({
